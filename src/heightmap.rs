@@ -118,6 +118,10 @@ impl Heightmap {
     }
 
     fn generate_mesh(&self, tile: &Tile) -> Mesh {
+        // TODO - need to juggle the boundary conditions to correctly stitch the tiles
+        //let twidth = (self.width +- 1) as f32;
+        //let theight = (self.height +- 1) as f32;
+        //
         let twidth = (self.width - 1) as f32;
         let theight = (self.height - 1) as f32;
         let half_twidth = twidth / 2_f32;
