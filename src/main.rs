@@ -26,7 +26,8 @@ fn main() {
     let hmap = Heightmap::from_png_file(&file_path).expect("Failed to create Heightmap");
 
     let eye = Point3::new(0.0, 20.0, 0.0);
-    let at = Point3::origin();
+    let at = Point3::new(0.0, 0.0, 0.0);
+    //let at = Point3::origin();
     let mut first_person_cam = FirstPerson::new(eye, at);
     //let mut first_person_cam = FirstPerson::new_with_frustrum(50.0, 1.0, 400.0,
     // eye, at);
@@ -43,25 +44,25 @@ fn main() {
             .add_geom_with_name(tile.name(), mesh_scale)
             .expect("Failed to add mesh tile");
 
-        // TODO - fix the tiling strip bug
-        //m.append_translation(&tile.alignment());
-
         m.set_color(1.0, 0.0, 0.0);
         //m.enable_backface_culling(false);
         //m.set_surface_rendering_activation(true);
 
         // Wireframe
         m.set_surface_rendering_activation(false);
-        m.set_points_size(5.0);
+        m.set_points_size(3.0);
         m.set_lines_width(1.0);
     }
 
     let mut c = window.add_cube(1.0, 1.0, 1.0);
     c.set_color(0.0, 0.0, 1.0);
 
-    let mut cb = window.add_cube(1.0, 1.0, 1.0);
-    cb.set_color(0.0, 1.0, 1.0);
-    cb.append_translation(&Translation3::new(128.0, 0.0, 0.0));
+    let mut b = window.add_cube(1.0, 1.0, 1.0);
+    b.set_color(0.0, 1.0, 1.0);
+    b.append_translation(&Translation3::new(-128.0, 0.0, 0.0));
+    let mut b = window.add_cube(1.0, 1.0, 1.0);
+    b.set_color(0.0, 1.0, 1.0);
+    b.append_translation(&Translation3::new(-256.0, 0.0, 0.0));
 
     while window.render_with_camera(&mut first_person_cam) {}
 }

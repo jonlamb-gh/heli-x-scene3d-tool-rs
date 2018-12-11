@@ -143,14 +143,32 @@ impl Heightmap {
                 let s = x as f32 / twidth;
                 let t = y as f32 / theight;
 
+                // TODO - clean this up
+                // Stitch the tile edges together
+                let px = if x == tile.start_x {
+                    x as f32 - (self.width / 2) as f32
+                } else if x == (tile.start_x + tile.width - 1) {
+                    (x + 1) as f32 - (self.width / 2) as f32
+                } else {
+                    (s * twidth) - half_twidth
+                };
+
+                let pz = if y == tile.start_y {
+                    y as f32 - (self.height / 2) as f32
+                } else if y == (tile.start_y + tile.height - 1) {
+                    (y + 1) as f32 - (self.height / 2) as f32
+                } else {
+                    (t * theight) - half_theight
+                };
+
                 // align coordinate frame, Y-up
                 vertices.push(Point3::new(
                     // image width mapped to X axis
-                    (s * twidth) - half_twidth,
+                    px,
                     // depth/elevation mapped to Y axis
                     (elevation * self.height_scale) + self.height_offset,
                     // image height mapped to Y axis
-                    (t * theight) - half_theight,
+                    pz,
                 ));
 
                 // Push empty normal vector
