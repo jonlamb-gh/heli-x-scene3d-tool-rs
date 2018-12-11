@@ -1,68 +1,53 @@
-// https://github.com/sebcrozet/kiss3d/issues/130
-// - split mesh into parts, add to MeshManager
-// http://kiss3d.org/doc/kiss3d/resource/struct.MeshManager.html
-//
-// https://www.ncollide.org/mesh_generation/#mesh-generation
-// https://docs.rs/ncollide/0.14.1/ncollide/procedural/struct.TriMesh.html
-
-use kiss3d::camera::FirstPerson;
-use kiss3d::light::Light;
-use kiss3d::resource::MeshManager;
-use kiss3d::window::Window;
-use nalgebra::{Point3, Translation3, Vector3};
 use std::env;
+use std::path::Path;
 
+mod alphamap;
+mod gui;
 mod heightmap;
 
+use crate::alphamap::Alphamap;
+use crate::gui::Gui;
 use crate::heightmap::Heightmap;
 
 fn main() {
-    let file_path = if let Some(p) = env::args().nth(1) {
+    // TODO - add cli/opts lib to handle args/etc
+    // - point to a src image file, construct the rest
+    let app_name = env::args()
+        .nth(0)
+        .unwrap_or(String::from("heli-x-scene3d-tool"));
+    let usage = format!("Usage: {} /path/to/project/res/", app_name);
+    let resource_root: String = if let Some(p) = env::args().nth(1) {
         p
     } else {
-        panic!("Expected a file path to heightmap.png");
+        panic!("Invalid arguments\n{}", usage);
     };
+    let resource_root_path = Path::new(&resource_root);
 
-    let hmap = Heightmap::from_png_file(&file_path).expect("Failed to create Heightmap");
-
-    let eye = Point3::new(0.0, 20.0, 0.0);
-    let at = Point3::new(0.0, 0.0, 0.0);
-    //let at = Point3::origin();
-    let mut first_person_cam = FirstPerson::new(eye, at);
-    //let mut first_person_cam = FirstPerson::new_with_frustrum(50.0, 1.0, 400.0,
-    // eye, at);
-    first_person_cam.set_move_step(10.0);
-
-    let mut window = Window::new("Heli-X Scene3D Tool");
-    window.set_light(Light::StickToCamera);
-
-    let tiles = MeshManager::get_global_manager(|mm| hmap.populate_mesh_manager(mm));
-
-    let mesh_scale = Vector3::new(1.0, 1.0, 1.0);
-    for tile in tiles {
-        let mut m = window
-            .add_geom_with_name(tile.name(), mesh_scale)
-            .expect("Failed to add mesh tile");
-
-        m.set_color(1.0, 0.0, 0.0);
-        //m.enable_backface_culling(false);
-        //m.set_surface_rendering_activation(true);
-
-        // Wireframe
-        m.set_surface_rendering_activation(false);
-        m.set_points_size(3.0);
-        m.set_lines_width(1.0);
+    if !resource_root_path.exists() {
+        panic!(
+            "Path {} does not exist\n{}",
+            resource_root_path.display(),
+            usage
+        );
     }
 
-    let mut c = window.add_cube(1.0, 1.0, 1.0);
-    c.set_color(0.0, 0.0, 1.0);
+    if !resource_root_path.is_dir() {
+        panic!(
+            "Path {} is not a directory\n{}",
+            resource_root_path.display(),
+            usage
+        );
+    }
 
-    let mut b = window.add_cube(1.0, 1.0, 1.0);
-    b.set_color(0.0, 1.0, 1.0);
-    b.append_translation(&Translation3::new(-128.0, 0.0, 0.0));
-    let mut b = window.add_cube(1.0, 1.0, 1.0);
-    b.set_color(0.0, 1.0, 1.0);
-    b.append_translation(&Translation3::new(-256.0, 0.0, 0.0));
+    let hmap_file = resource_root_path.join("heightmap.png");
+    let amap_file = resource_root_path.join("alphamap.png");
 
-    while window.render_with_camera(&mut first_person_cam) {}
+    let hmap = Heightmap::from_png_file(&hmap_file).expect("Failed to create Heightmap");
+
+    let (dw, dh) = hmap.dimensions();
+    let amap = Alphamap::from_png_file(&amap_file, dw, dh).expect("Failed to create Alphamap");
+
+    let mut gui = Gui::new(hmap, amap);
+
+    while gui.render() {}
 }

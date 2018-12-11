@@ -7,6 +7,6 @@ edition = "2018"
 [dependencies]
 kiss3d = "0.17"
 xml-rs = "0.8.0"
-png = "0.13"
 nalgebra = "*"
 ncollide3d = "*"
+image = "*"

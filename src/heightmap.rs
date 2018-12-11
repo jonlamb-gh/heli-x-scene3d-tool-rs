@@ -1,10 +1,9 @@
-// TODO - support more than 8-bit depths
+// TODO - verify channel depth, hard-coded to 8 bits
 
+use image::{DynamicImage, GenericImage, ImageError, Pixel};
 use kiss3d::resource::{Mesh, MeshManager};
-use nalgebra::{normalize, Point3, Vector3};
-use png::{BitDepth, ColorType, Decoder, DecodingError};
+use nalgebra::{normalize, Point2, Point3, Vector3};
 use std::cell::RefCell;
-use std::fs::File;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -14,13 +13,11 @@ pub enum Error {
     FileNotSupported,
 }
 
-#[derive(Debug)]
 pub struct Heightmap {
-    src_data: Vec<u8>,
+    src_img: DynamicImage,
+    filtered_img: DynamicImage,
     width: usize,
     height: usize,
-    height_scale: f32,
-    height_offset: f32,
     tiles: Vec<Tile>,
 }
 
@@ -42,46 +39,29 @@ impl Tile {
 }
 
 impl Heightmap {
-    pub fn from_png_file<P: AsRef<Path>>(file_path: P) -> Result<Self, Error> {
-        let f = File::open(file_path)?;
+    pub fn from_png_file(file_path: &Path) -> Result<Self, Error> {
+        let src_img = image::open(file_path)?;
 
-        let decoder = Decoder::new(f);
-        let (info, mut reader) = decoder.read_info().unwrap();
+        let (src_width, src_height) = src_img.dimensions();
 
-        assert_eq!(
-            info.color_type,
-            ColorType::Grayscale,
-            "Only 8-bit grayscale is supported"
-        );
-
-        assert_eq!(
-            info.bit_depth,
-            BitDepth::Eight,
-            "Only 8-bit grayscale is supported"
-        );
-
-        // TODO - update these
+        // TODO - make this not necessary
         // Enforce mesh tiling constraints
         assert_eq!(
-            info.width as usize % TILE_SIZE,
+            src_width as usize % TILE_SIZE,
             0,
             "Only mod {} dimensions are supported",
             TILE_SIZE
         );
         assert_eq!(
-            info.height as usize % TILE_SIZE,
+            src_height as usize % TILE_SIZE,
             0,
             "Only mod {} dimensions are supported",
             TILE_SIZE
         );
 
-        // Allocate and fill the output buffer
-        let mut buf: Vec<u8> = vec![0; info.buffer_size()];
-        reader.next_frame(&mut buf)?;
-
         // Split up the grid into TILE_SIZE x TILE_SIZE meshes
-        let num_tiles_x = info.width as usize / TILE_SIZE;
-        let num_tiles_y = info.width as usize / TILE_SIZE;
+        let num_tiles_x = src_width as usize / TILE_SIZE;
+        let num_tiles_y = src_height as usize / TILE_SIZE;
 
         let mut tiles: Vec<Tile> = Vec::new();
         for ty in 0..num_tiles_y {
@@ -97,20 +77,37 @@ impl Heightmap {
             }
         }
 
+        let filtered_img = src_img.clone();
         Ok(Self {
-            src_data: buf,
-            width: info.width as _,
-            height: info.height as _,
-            height_scale: 5.0,
-            height_offset: 0.0,
+            src_img,
+            filtered_img,
+            width: src_width as _,
+            height: src_height as _,
             tiles,
         })
+    }
+
+    pub fn dimensions(&self) -> (usize, usize) {
+        (self.width, self.height)
+    }
+
+    /*
+    pub fn src_image(&self) -> &DynamicImage {
+        &self.src_img
+    }
+    */
+
+    pub fn src_texture(&self) -> DynamicImage {
+        DynamicImage::ImageRgb8(self.src_img.to_rgb())
+    }
+
+    pub fn filtered_texture(&self) -> DynamicImage {
+        DynamicImage::ImageRgb8(self.filtered_img.to_rgb())
     }
 
     pub fn populate_mesh_manager(&self, mm: &mut MeshManager) -> &[Tile] {
         for tile in &self.tiles {
             let mesh = self.generate_mesh(tile);
-            //mm.add(Rc::new(RefCell::new(mesh)).clone(), tile.name());
             mm.add(Rc::new(RefCell::new(mesh)), tile.name());
         }
 
@@ -118,10 +115,6 @@ impl Heightmap {
     }
 
     fn generate_mesh(&self, tile: &Tile) -> Mesh {
-        // TODO - need to juggle the boundary conditions to correctly stitch the tiles
-        //let twidth = (self.width +- 1) as f32;
-        //let theight = (self.height +- 1) as f32;
-        //
         let twidth = (self.width - 1) as f32;
         let theight = (self.height - 1) as f32;
         let half_twidth = twidth / 2_f32;
@@ -132,18 +125,20 @@ impl Heightmap {
         let mut vertices: Vec<Point3<f32>> = vec![];
         let mut normals: Vec<Vector3<f32>> = vec![];
         let mut indices: Vec<Point3<u16>> = vec![];
+        let mut uvs: Vec<Point2<f32>> = vec![];
 
         // Generate the vertices for the vbo
         for y in tile.start_y..(tile.start_y + tile.height) {
             for x in tile.start_x..(tile.start_x + tile.width) {
-                let index = (y * self.width) + x;
-
-                let elevation: f32 = self.src_data[index] as f32 / 255.0;
+                let pixel = self.src_img.get_pixel(x as _, y as _);
+                let elevation: f32 = pixel.to_luma().data[0] as f32 / 255.0;
 
                 let s = x as f32 / twidth;
                 let t = y as f32 / theight;
 
-                // TODO - clean this up
+                // TODO - clean this up, it's just moving the edges closer together,
+                // not a proper stitch
+                //
                 // Stitch the tile edges together
                 let px = if x == tile.start_x {
                     x as f32 - (self.width / 2) as f32
@@ -164,12 +159,13 @@ impl Heightmap {
                 // align coordinate frame, Y-up
                 vertices.push(Point3::new(
                     // image width mapped to X axis
-                    px,
-                    // depth/elevation mapped to Y axis
-                    (elevation * self.height_scale) + self.height_offset,
-                    // image height mapped to Y axis
+                    px,        // depth/elevation mapped to Y axis
+                    elevation, // image height mapped to Y axis
                     pz,
                 ));
+
+                // Construct uv texture coordinates
+                uvs.push(Point2::new(s, t));
 
                 // Push empty normal vector
                 normals.push(Vector3::new(0_f32, 0_f32, 0_f32));
@@ -218,7 +214,7 @@ impl Heightmap {
             *n = normalize(n);
         }
 
-        Mesh::new(vertices, indices, Some(normals), None, false)
+        Mesh::new(vertices, indices, Some(normals), Some(uvs), false)
     }
 }
 
@@ -230,8 +226,8 @@ impl From<std::io::Error> for Error {
     }
 }
 
-impl From<DecodingError> for Error {
-    fn from(e: DecodingError) -> Error {
+impl From<ImageError> for Error {
+    fn from(e: ImageError) -> Error {
         match e {
             _ => Error::FileNotSupported,
         }
