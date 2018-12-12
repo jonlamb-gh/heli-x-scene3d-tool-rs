@@ -16,6 +16,8 @@ written in [2018](https://doc.rust-lang.org/edition-guide/rust-2018) Rust.
 
 ## Usage
 
+TODO - change this after cli/opts
+
 ```bash
 heli-x-scene3d-tool /path/to/project/res/
 ```

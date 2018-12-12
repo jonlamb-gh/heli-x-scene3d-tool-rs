@@ -102,7 +102,10 @@ impl Heightmap {
     }
 
     pub fn filtered_texture(&self) -> DynamicImage {
-        DynamicImage::ImageRgb8(self.filtered_img.to_rgb())
+        // TODO
+        //DynamicImage::ImageRgb8(self.filtered_img.to_rgb())
+        let kernel = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+        DynamicImage::ImageRgb8(self.filtered_img.filter3x3(&kernel).to_rgb())
     }
 
     pub fn populate_mesh_manager(&self, mm: &mut MeshManager) -> &[Tile] {

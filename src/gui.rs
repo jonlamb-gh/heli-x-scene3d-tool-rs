@@ -21,6 +21,7 @@ pub struct Gui {
     height_offset: f32,
     default_texture: Rc<Texture>,
     hmap_src_rect: PlanarSceneNode,
+    hmap_filt_rect: PlanarSceneNode,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -60,7 +61,7 @@ impl Gui {
         let height_offset = 0.0;
         let mesh_scale = Vector3::new(1.0, height_scale, 1.0);
 
-        let mut win = Window::new("Heli-X Scene3D Tool");
+        let mut win = Window::new_with_size("Heli-X Scene3D Tool", 800, 600);
 
         // TODO - which lighting is better?
         win.set_light(Light::StickToCamera);
@@ -69,6 +70,7 @@ impl Gui {
         // Load textures
         TextureManager::get_global_manager(|tm| {
             tm.add_image(hmap.src_texture(), "heightmap");
+            tm.add_image(hmap.filtered_texture(), "heightmap_filtered");
             tm.add_image(amap.src_texture(), "alphamap_src");
         });
 
@@ -82,11 +84,9 @@ impl Gui {
             terrain_nodes.push(m);
         }
 
-        // TODO - toggle/size/location/etc
+        // TODO - toggle/size/location/resize-event/etc
         let mut hmap_src_rect = win.add_rectangle(150.0, 150.0);
-        let tx = win.width() as f32 / 2.0 - 400.0;
-        let ty = win.height() as f32 / 2.0 - 300.0;
-        hmap_src_rect.append_translation(&Translation2::new(tx, ty));
+        hmap_src_rect.append_translation(&Translation2::new(0.0, 0.0));
         hmap_src_rect.set_surface_rendering_activation(true);
         hmap_src_rect.set_points_size(0.0);
         hmap_src_rect.set_lines_width(0.0);
@@ -103,6 +103,25 @@ impl Gui {
         });
         hmap_src_rect.set_visible(false);
 
+        // TODO - toggle/size/location/resize-event/etc
+        let mut hmap_filt_rect = win.add_rectangle(150.0, 150.0);
+        hmap_filt_rect.append_translation(&Translation2::new(0.0, -160.0));
+        hmap_filt_rect.set_surface_rendering_activation(true);
+        hmap_filt_rect.set_points_size(0.0);
+        hmap_filt_rect.set_lines_width(0.0);
+        hmap_filt_rect.set_texture_with_name("heightmap_filtered");
+        hmap_filt_rect.modify_uvs(&mut |v| {
+            v[0].x = 0.0;
+            v[0].y = 0.0;
+            v[1].x = 1.0;
+            v[1].y = 1.0;
+            v[2].x = 0.0;
+            v[2].y = 1.0;
+            v[3].x = 1.0;
+            v[3].y = 0.0;
+        });
+        hmap_filt_rect.set_visible(false);
+
         let mut gui = Self {
             hmap,
             amap,
@@ -114,6 +133,7 @@ impl Gui {
             height_offset,
             default_texture: TextureManager::get_global_manager(|tm| tm.get_default()),
             hmap_src_rect,
+            hmap_filt_rect,
         };
 
         gui.set_terrain_mode(gui.terrain_mode.clone());
@@ -145,6 +165,8 @@ impl Gui {
                         } else if button == Key::Y {
                             self.hmap_src_rect
                                 .set_visible(!self.hmap_src_rect.is_visible());
+                            self.hmap_filt_rect
+                                .set_visible(self.hmap_src_rect.is_visible());
                         }
 
                         // Override the default keyboard handler
