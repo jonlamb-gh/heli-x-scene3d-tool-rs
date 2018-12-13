@@ -7,6 +7,7 @@ mod gui;
 mod heightmap;
 mod origin_model;
 mod ortho_view;
+mod terrain_mode;
 
 use crate::alphamap::Alphamap;
 use crate::gui::Gui;
