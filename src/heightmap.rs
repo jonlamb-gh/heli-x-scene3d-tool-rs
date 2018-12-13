@@ -158,7 +158,7 @@ impl Heightmap {
                 ));
 
                 // Construct uv texture coordinates
-                uvs.push(Point2::new(s, t));
+                uvs.push(Point2::new(1.0 - s, 1.0 - t));
 
                 // Push empty normal vector
                 normals.push(Vector3::new(0_f32, 0_f32, 0_f32));
