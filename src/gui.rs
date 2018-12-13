@@ -1,13 +1,18 @@
+// TODO - break this down into smaller bits
+
 use crate::alphamap::Alphamap;
+use crate::ground_plane::GroundPlane;
 use crate::heightmap::Heightmap;
-use kiss3d::camera::FirstPerson;
+use crate::origin_model::OriginModel;
+use crate::ortho_view::OrthoView;
+use kiss3d::camera::{Camera, FirstPerson};
 use kiss3d::event::{Action, Key, WindowEvent};
 use kiss3d::light::Light;
 use kiss3d::resource::{MeshManager, Texture, TextureManager};
-use kiss3d::scene::{PlanarSceneNode, SceneNode};
+use kiss3d::scene::SceneNode;
 use kiss3d::text::Font;
 use kiss3d::window::Window;
-use nalgebra::{Point2, Point3, Translation2, Translation3, Vector3};
+use nalgebra::{Point2, Point3, Translation3, Vector3};
 use std::rc::Rc;
 
 pub struct Gui {
@@ -20,8 +25,9 @@ pub struct Gui {
     height_scale: f32,
     height_offset: f32,
     default_texture: Rc<Texture>,
-    hmap_src_rect: PlanarSceneNode,
-    hmap_filt_rect: PlanarSceneNode,
+    ortho_view: OrthoView,
+    origin_model: OriginModel,
+    ground_plane: GroundPlane,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,7 +67,7 @@ impl Gui {
         let height_offset = 0.0;
         let mesh_scale = Vector3::new(1.0, height_scale, 1.0);
 
-        let mut win = Window::new_with_size("Heli-X Scene3D Tool", 800, 600);
+        let mut win = Window::new("Heli-X Scene3D Tool");
 
         // TODO - which lighting is better?
         win.set_light(Light::StickToCamera);
@@ -70,7 +76,6 @@ impl Gui {
         // Load textures
         TextureManager::get_global_manager(|tm| {
             tm.add_image(hmap.src_texture(), "heightmap");
-            tm.add_image(hmap.filtered_texture(), "heightmap_filtered");
             tm.add_image(amap.src_texture(), "alphamap_src");
         });
 
@@ -85,42 +90,14 @@ impl Gui {
         }
 
         // TODO - toggle/size/location/resize-event/etc
-        let mut hmap_src_rect = win.add_rectangle(150.0, 150.0);
-        hmap_src_rect.append_translation(&Translation2::new(0.0, 0.0));
-        hmap_src_rect.set_surface_rendering_activation(true);
-        hmap_src_rect.set_points_size(0.0);
-        hmap_src_rect.set_lines_width(0.0);
-        hmap_src_rect.set_texture_with_name("heightmap");
-        hmap_src_rect.modify_uvs(&mut |v| {
-            v[0].x = 0.0;
-            v[0].y = 0.0;
-            v[1].x = 1.0;
-            v[1].y = 1.0;
-            v[2].x = 0.0;
-            v[2].y = 1.0;
-            v[3].x = 1.0;
-            v[3].y = 0.0;
-        });
-        hmap_src_rect.set_visible(false);
-
-        // TODO - toggle/size/location/resize-event/etc
-        let mut hmap_filt_rect = win.add_rectangle(150.0, 150.0);
-        hmap_filt_rect.append_translation(&Translation2::new(0.0, -160.0));
-        hmap_filt_rect.set_surface_rendering_activation(true);
-        hmap_filt_rect.set_points_size(0.0);
-        hmap_filt_rect.set_lines_width(0.0);
-        hmap_filt_rect.set_texture_with_name("heightmap_filtered");
-        hmap_filt_rect.modify_uvs(&mut |v| {
-            v[0].x = 0.0;
-            v[0].y = 0.0;
-            v[1].x = 1.0;
-            v[1].y = 1.0;
-            v[2].x = 0.0;
-            v[2].y = 1.0;
-            v[3].x = 1.0;
-            v[3].y = 0.0;
-        });
-        hmap_filt_rect.set_visible(false);
+        let mut ortho_view = OrthoView::new(
+            &mut win,
+            Point2::new(300.0, 300.0),
+            Point2::new(hmap.dimensions().0 as _, hmap.dimensions().1 as _),
+        );
+        ortho_view.set_visible(false);
+        let origin_model = OriginModel::new(&mut win);
+        let ground_plane = GroundPlane::new(800, 10);
 
         let mut gui = Self {
             hmap,
@@ -132,8 +109,9 @@ impl Gui {
             height_scale,
             height_offset,
             default_texture: TextureManager::get_global_manager(|tm| tm.get_default()),
-            hmap_src_rect,
-            hmap_filt_rect,
+            ortho_view,
+            origin_model,
+            ground_plane,
         };
 
         gui.set_terrain_mode(gui.terrain_mode.clone());
@@ -143,13 +121,16 @@ impl Gui {
     }
 
     pub fn render(&mut self) -> bool {
+        let mut some_events = false;
         let keep_rendering = self.win.render_with_camera(&mut self.cam);
 
         if keep_rendering {
             // TODO - break apart event handling
             for mut event in self.win.events().iter() {
+                some_events = true;
                 match event.value {
                     WindowEvent::Key(button, Action::Press, _) => {
+                        // TODO - this keymap makes no sense
                         if button == Key::Return {
                             self.reset_camera();
                         } else if button == Key::T {
@@ -163,18 +144,44 @@ impl Gui {
                         } else if button == Key::L {
                             self.set_terrain_height_offset(self.height_offset - 1.0);
                         } else if button == Key::Y {
-                            self.hmap_src_rect
-                                .set_visible(!self.hmap_src_rect.is_visible());
-                            self.hmap_filt_rect
-                                .set_visible(self.hmap_src_rect.is_visible());
+                            self.ortho_view.set_visible(!self.ortho_view.is_visible());
+                        } else if button == Key::N {
+                            self.origin_model
+                                .set_static_height(self.origin_model.position().y + 1.0);
+                        } else if button == Key::M {
+                            self.origin_model
+                                .set_static_height(self.origin_model.position().y - 1.0);
+                        } else if button == Key::B {
+                            self.origin_model
+                                .set_visible(!self.origin_model.is_visible());
+                        } else if button == Key::G {
+                            self.ground_plane
+                                .set_visible(!self.ground_plane.is_visible());
                         }
 
                         // Override the default keyboard handler
                         event.inhibited = true
                     }
+                    WindowEvent::CursorPos(x, y, _) => {
+                        self.origin_model.set_position(&self.cam, x as _, y as _);
+                        self.ortho_view
+                            .set_origin_position(self.origin_model.position());
+                        // Dont override the default handler
+                    }
+                    WindowEvent::FramebufferSize(w, h) => {
+                        self.origin_model.set_screen_size(&self.cam, w as _, h as _);
+                        // Dont override the default handler
+                    }
                     _ => {}
                 }
             }
+
+            if some_events {
+                self.ortho_view.set_cam_position(&self.cam.eye());
+                self.ortho_view.set_cam_orientation(&self.cam.eye_dir());
+            }
+
+            self.ground_plane.draw(&mut self.win);
 
             self.render_scene_info_text();
         }
@@ -296,6 +303,15 @@ impl Gui {
         font_pos.y += next_font;
         self.win.draw_text(
             &format!("Height Offset: {}", self.height_offset),
+            &font_pos,
+            font_size,
+            &Font::default(),
+            &font_color,
+        );
+
+        font_pos.y += next_font;
+        self.win.draw_text(
+            &format!("Origin Model at: {}", self.origin_model.position()),
             &font_pos,
             font_size,
             &Font::default(),

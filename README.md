@@ -1,12 +1,7 @@
 # Heli-X Scene3D Tool
 
-A tool to interactively generate [Heli-X simulator](http://www.heli-x.info) Scene3D
-projects from an input heightmap.
-
-## TODO
-
-Take the [C prototype](https://github.com/jonlamb-gh/heli-x-scene3d-tool) and make a usable tool
-written in [2018](https://doc.rust-lang.org/edition-guide/rust-2018) Rust.
+A hacked-together prototype tool to interactively view and generate
+[Heli-X simulator](http://www.heli-x.info) Scene3D projects from an input heightmap image.
 
 ## Dependencies
 

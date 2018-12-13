@@ -15,7 +15,6 @@ pub enum Error {
 
 pub struct Heightmap {
     src_img: DynamicImage,
-    filtered_img: DynamicImage,
     width: usize,
     height: usize,
     tiles: Vec<Tile>,
@@ -77,10 +76,8 @@ impl Heightmap {
             }
         }
 
-        let filtered_img = src_img.clone();
         Ok(Self {
             src_img,
-            filtered_img,
             width: src_width as _,
             height: src_height as _,
             tiles,
@@ -99,13 +96,6 @@ impl Heightmap {
 
     pub fn src_texture(&self) -> DynamicImage {
         DynamicImage::ImageRgb8(self.src_img.to_rgb())
-    }
-
-    pub fn filtered_texture(&self) -> DynamicImage {
-        // TODO
-        //DynamicImage::ImageRgb8(self.filtered_img.to_rgb())
-        let kernel = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
-        DynamicImage::ImageRgb8(self.filtered_img.filter3x3(&kernel).to_rgb())
     }
 
     pub fn populate_mesh_manager(&self, mm: &mut MeshManager) -> &[Tile] {

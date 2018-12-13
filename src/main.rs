@@ -2,8 +2,11 @@ use std::env;
 use std::path::Path;
 
 mod alphamap;
+mod ground_plane;
 mod gui;
 mod heightmap;
+mod origin_model;
+mod ortho_view;
 
 use crate::alphamap::Alphamap;
 use crate::gui::Gui;
@@ -41,11 +44,16 @@ fn main() {
 
     let hmap_file = resource_root_path.join("heightmap.png");
     let amap_file = resource_root_path.join("alphamap.png");
+    let some_amap_file = if amap_file.exists() {
+        Some(&amap_file)
+    } else {
+        None
+    };
 
     let hmap = Heightmap::from_png_file(&hmap_file).expect("Failed to create Heightmap");
 
     let (dw, dh) = hmap.dimensions();
-    let amap = Alphamap::from_png_file(&amap_file, dw, dh).expect("Failed to create Alphamap");
+    let amap = Alphamap::from_png_file(some_amap_file, dw, dh).expect("Failed to create Alphamap");
 
     let mut gui = Gui::new(hmap, amap);
 
